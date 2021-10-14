@@ -1,13 +1,20 @@
 #[macro_use]
 extern crate rocket;
-use rayon::prelude::*;
+
 use rocket::{
   response::status,
   serde::{json::Json, Deserialize, Serialize},
   Config,
 };
+use rocket_okapi::{
+  okapi::{schemars, schemars::JsonSchema},
+  openapi, openapi_get_routes,
+  rapidoc::*,
+  settings::UrlObject,
+  swagger_ui::*,
+};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct ExecuteRequest {
   language: String,
   version: String,
@@ -15,13 +22,13 @@ struct ExecuteRequest {
   test: Test,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct Test {
   input: String,
   output: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct RunJson {
   stdout: String,
   stderr: String,
@@ -30,14 +37,14 @@ struct RunJson {
   output: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct ExecuteJson {
   run: RunJson,
   language: String,
   version: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct RuntimeJson {
   language: String,
   version: String,
@@ -45,13 +52,13 @@ struct RuntimeJson {
   runtime: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct FileJson {
   name: Option<String>,
   content: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct PostExecuteJson {
   language: String,
   version: String,
@@ -64,13 +71,14 @@ struct PostExecuteJson {
   run_memory_limit: Option<i64>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct ExecuteResult {
   stdout: String,
   stderr: Option<String>,
   passed: bool,
 }
 
+#[openapi]
 #[post("/submit", data = "<data>")]
 async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, status::NotFound<String>> {
   let execute_api = "http://localhost:2000/api/v2/execute";
@@ -95,22 +103,30 @@ async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, statu
     .json(&execute_json)
     .send()
     .await
-    .expect("asd")
+    .map_err(|e| status::NotFound(e.to_string()))?
     .json::<ExecuteJson>()
     .await
-    .expect("qwe");
+    .map_err(|e| status::NotFound(e.to_string()))?;
+
+  let stdout = if res.run.stdout.ends_with('\n') {
+    // chop off \n if it ends with it
+    res.run.stdout[0..res.run.stdout.len() - 1].to_string()
+  } else {
+    res.run.stdout.to_owned()
+  };
 
   Ok(Json(ExecuteResult {
-    stdout: res.run.stdout,
+    stdout: res.run.stdout.to_owned(),
     stderr: if res.run.stderr == "" {
       None
     } else {
       Some(res.run.stderr)
     },
-    passed: res.run.output.trim() == data.test.output.trim(),
+    passed: stdout == data.test.output,
   }))
 }
 
+#[openapi]
 #[get("/runtimes")]
 async fn runtimes() -> Result<Json<Vec<RuntimeJson>>, status::NotFound<String>> {
   let runtimes_api = "http://localhost:2000/api/v2/runtimes";
@@ -131,48 +147,27 @@ fn rocket() -> _ {
     port: 5000,
     ..Config::default()
   })
-  .mount("/", routes![runtimes, submit])
+  .mount("/", openapi_get_routes![runtimes, submit])
+  .mount(
+    "/swagger-ui/",
+    make_swagger_ui(&SwaggerUIConfig {
+      url: "../openapi.json".to_owned(),
+      ..Default::default()
+    }),
+  )
+  .mount(
+    "/rapidoc/",
+    make_rapidoc(&RapiDocConfig {
+      general: GeneralConfig {
+        spec_urls: vec![UrlObject::new("General", "../openapi.json")],
+        ..Default::default()
+      },
+      hide_show: HideShowConfig {
+        allow_spec_url_load: false,
+        allow_spec_file_load: false,
+        ..Default::default()
+      },
+      ..Default::default()
+    }),
+  )
 }
-
-// #[tokio::main]
-// async fn main() {
-//   let runtimes_api = "http://localhost:2000/api/v2/runtimes";
-//   let execute_api = "http://localhost:2000/api/v2/execute";
-
-//   let res = reqwest::get(runtimes_api)
-//     .await
-//     .expect("1")
-//     .json::<Vec<RuntimeJson>>()
-//     .await
-//     .expect("2");
-
-//   let post_json_str = r#"
-//     {
-//       "language": "ruby",
-//       "version": "3.0.1",
-//       "files": [
-//         {
-//           "content": "$><<`dd`.split.sum(&:to_i)"
-//         }
-//       ],
-//       "stdin": "1\n2\n3",
-//       "compile_timeout": 10000,
-//       "run_timeout": 3000,
-//       "compile_memory_limit": -1,
-//       "run_memory_limit": -1
-//     }"#;
-
-//   let post_json: PostExecuteJson = serde_json::from_str(post_json_str).unwrap();
-
-//   let res = reqwest::Client::new()
-//     .post(execute_api)
-//     .json(&post_json)
-//     .send()
-//     .await
-//     .unwrap()
-//     .json::<ExecuteJson>()
-//     .await
-//     .unwrap();
-
-//   println!("{:#?}", res);
-// }
