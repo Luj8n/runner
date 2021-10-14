@@ -1,10 +1,25 @@
 #[macro_use]
 extern crate rocket;
+use rayon::prelude::*;
 use rocket::{
-  response::status::NotFound,
+  response::status,
   serde::{json::Json, Deserialize, Serialize},
   Config,
 };
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ExecuteRequest {
+  language: String,
+  version: String,
+  code: String,
+  test: Test,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Test {
+  input: String,
+  output: String,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RunJson {
@@ -49,16 +64,63 @@ struct PostExecuteJson {
   run_memory_limit: Option<i64>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct ExecuteResult {
+  stdout: String,
+  stderr: Option<String>,
+  passed: bool,
+}
+
+#[post("/submit", data = "<data>")]
+async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, status::NotFound<String>> {
+  let execute_api = "http://localhost:2000/api/v2/execute";
+
+  let execute_json = PostExecuteJson {
+    language: data.language.to_owned(),
+    version: data.version.to_owned(),
+    args: None,
+    compile_memory_limit: None,
+    compile_timeout: None,
+    run_memory_limit: None,
+    run_timeout: None,
+    stdin: Some(data.test.input.to_owned()),
+    files: vec![FileJson {
+      name: None,
+      content: data.code.to_owned(),
+    }],
+  };
+
+  let res = reqwest::Client::new()
+    .post(execute_api)
+    .json(&execute_json)
+    .send()
+    .await
+    .expect("asd")
+    .json::<ExecuteJson>()
+    .await
+    .expect("qwe");
+
+  Ok(Json(ExecuteResult {
+    stdout: res.run.stdout,
+    stderr: if res.run.stderr == "" {
+      None
+    } else {
+      Some(res.run.stderr)
+    },
+    passed: res.run.output.trim() == data.test.output.trim(),
+  }))
+}
+
 #[get("/runtimes")]
-async fn runtimes() -> Result<Json<Vec<RuntimeJson>>, NotFound<String>> {
+async fn runtimes() -> Result<Json<Vec<RuntimeJson>>, status::NotFound<String>> {
   let runtimes_api = "http://localhost:2000/api/v2/runtimes";
 
   let res = reqwest::get(runtimes_api)
     .await
-    .map_err(|_| NotFound("1".to_string()))?
+    .map_err(|e| status::NotFound(e.to_string()))?
     .json::<Vec<RuntimeJson>>()
     .await
-    .map_err(|_| NotFound("2".to_string()))?;
+    .map_err(|e| status::NotFound(e.to_string()))?;
 
   Ok(Json(res))
 }
@@ -69,7 +131,7 @@ fn rocket() -> _ {
     port: 5000,
     ..Config::default()
   })
-  .mount("/", routes![runtimes])
+  .mount("/", routes![runtimes, submit])
 }
 
 // #[tokio::main]
