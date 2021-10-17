@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
+use itertools::Itertools;
 use rocket::{
   response::status,
   serde::{json::Json, Deserialize, Serialize},
@@ -8,10 +9,9 @@ use rocket::{
 };
 use rocket_okapi::{
   okapi::{schemars, schemars::JsonSchema},
-  openapi, openapi_get_routes,
-  rapidoc::*,
+  openapi, openapi_get_routes, rapidoc,
   settings::UrlObject,
-  swagger_ui::*,
+  swagger_ui,
 };
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -40,6 +40,12 @@ struct RunJson {
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct ExecuteJson {
   run: RunJson,
+  language: String,
+  version: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+struct RuntimeReturnJson {
   language: String,
   version: String,
 }
@@ -117,7 +123,7 @@ async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, statu
 
   Ok(Json(ExecuteResult {
     stdout: res.run.stdout.to_owned(),
-    stderr: if res.run.stderr == "" {
+    stderr: if res.run.stderr.is_empty() {
       None
     } else {
       Some(res.run.stderr)
@@ -128,7 +134,7 @@ async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, statu
 
 #[openapi]
 #[get("/runtimes")]
-async fn runtimes() -> Result<Json<Vec<RuntimeJson>>, status::NotFound<String>> {
+async fn runtimes() -> Result<Json<Vec<RuntimeReturnJson>>, status::NotFound<String>> {
   let runtimes_api = "http://localhost:2000/api/v2/runtimes";
 
   let res = reqwest::get(runtimes_api)
@@ -136,7 +142,13 @@ async fn runtimes() -> Result<Json<Vec<RuntimeJson>>, status::NotFound<String>> 
     .map_err(|e| status::NotFound(e.to_string()))?
     .json::<Vec<RuntimeJson>>()
     .await
-    .map_err(|e| status::NotFound(e.to_string()))?;
+    .map_err(|e| status::NotFound(e.to_string()))?
+    .iter()
+    .map(|r| RuntimeReturnJson {
+      language: r.language.to_owned(),
+      version: r.version.to_owned(),
+    })
+    .collect_vec();
 
   Ok(Json(res))
 }
@@ -150,19 +162,19 @@ fn rocket() -> _ {
   .mount("/", openapi_get_routes![runtimes, submit])
   .mount(
     "/swagger-ui/",
-    make_swagger_ui(&SwaggerUIConfig {
+    swagger_ui::make_swagger_ui(&swagger_ui::SwaggerUIConfig {
       url: "../openapi.json".to_owned(),
       ..Default::default()
     }),
   )
   .mount(
     "/rapidoc/",
-    make_rapidoc(&RapiDocConfig {
-      general: GeneralConfig {
+    rapidoc::make_rapidoc(&rapidoc::RapiDocConfig {
+      general: rapidoc::GeneralConfig {
         spec_urls: vec![UrlObject::new("General", "../openapi.json")],
         ..Default::default()
       },
-      hide_show: HideShowConfig {
+      hide_show: rapidoc::HideShowConfig {
         allow_spec_url_load: false,
         allow_spec_file_load: false,
         ..Default::default()
