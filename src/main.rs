@@ -14,12 +14,15 @@ use rocket_okapi::{
   swagger_ui,
 };
 
+const MEMORY_LIMIT: i64 = 512 * 1024 * 1024;
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct ExecuteRequest {
   language: String,
   version: String,
   code: String,
   test: Test,
+  timeout: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -93,10 +96,10 @@ async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, statu
     language: data.language.to_owned(),
     version: data.version.to_owned(),
     args: None,
-    compile_memory_limit: None,
+    compile_memory_limit: Some(MEMORY_LIMIT),
     compile_timeout: None,
     run_memory_limit: None,
-    run_timeout: None,
+    run_timeout: Some(data.timeout),
     stdin: Some(data.test.input.to_owned()),
     files: vec![FileJson {
       name: None,
