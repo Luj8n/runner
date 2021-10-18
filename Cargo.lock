@@ -1196,6 +1196,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "runner"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "reqwest",
+ "rocket",
+ "rocket_okapi",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "rustc_version"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1399,19 +1412,6 @@ checksum = "5dc90fe6c7be1a323296982db1836d1ea9e47b6839496dde9a541bc496df3516"
 dependencies = [
  "libc",
  "winapi",
-]
-
-[[package]]
-name = "sorcery"
-version = "0.1.0"
-dependencies = [
- "itertools",
- "reqwest",
- "rocket",
- "rocket_okapi",
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
