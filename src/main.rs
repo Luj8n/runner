@@ -14,7 +14,13 @@ use rocket_okapi::{
   swagger_ui,
 };
 
-const MEMORY_LIMIT: i64 = 512 * 1024 * 1024;
+const PORT: u16 = 5000;
+
+const COMPILE_MEMORY_LIMIT: i64 = 512 * 1024 * 1024;
+const RUN_MEMORY_LIMIT: i64 = 512 * 1024 * 1024;
+
+const EXECUTE_API: &str = "http://localhost:2000/api/v2/execute";
+const RUNTIMES_API: &str = "http://localhost:2000/api/v2/runtimes";
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 struct ExecuteRequest {
@@ -85,20 +91,19 @@ struct ExecuteResult {
   stdout: String,
   stderr: Option<String>,
   passed: bool,
+  time_limit_exceeded: bool,
 }
 
 #[openapi]
 #[post("/submit", data = "<data>")]
 async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, status::NotFound<String>> {
-  let execute_api = "http://localhost:2000/api/v2/execute";
-
   let execute_json = PostExecuteJson {
     language: data.language.to_owned(),
     version: data.version.to_owned(),
     args: None,
-    compile_memory_limit: Some(MEMORY_LIMIT),
+    compile_memory_limit: Some(COMPILE_MEMORY_LIMIT),
     compile_timeout: None,
-    run_memory_limit: None,
+    run_memory_limit: Some(RUN_MEMORY_LIMIT),
     run_timeout: Some(data.timeout),
     stdin: Some(data.test.input.to_owned()),
     files: vec![FileJson {
@@ -108,7 +113,7 @@ async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, statu
   };
 
   let res = reqwest::Client::new()
-    .post(execute_api)
+    .post(EXECUTE_API)
     .json(&execute_json)
     .send()
     .await
@@ -124,6 +129,8 @@ async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, statu
     res.run.stdout.to_owned()
   };
 
+  let time_limit_exceeded = res.run.signal.map(|s| s == "SIGKILL").unwrap_or(false);
+
   Ok(Json(ExecuteResult {
     stdout: res.run.stdout.to_owned(),
     stderr: if res.run.stderr.is_empty() {
@@ -131,16 +138,15 @@ async fn submit(data: Json<ExecuteRequest>) -> Result<Json<ExecuteResult>, statu
     } else {
       Some(res.run.stderr)
     },
-    passed: stdout == data.test.output,
+    passed: stdout == data.test.output && !time_limit_exceeded,
+    time_limit_exceeded,
   }))
 }
 
 #[openapi]
 #[get("/runtimes")]
 async fn runtimes() -> Result<Json<Vec<RuntimeReturnJson>>, status::NotFound<String>> {
-  let runtimes_api = "http://localhost:2000/api/v2/runtimes";
-
-  let res = reqwest::get(runtimes_api)
+  let res = reqwest::get(RUNTIMES_API)
     .await
     .map_err(|e| status::NotFound(e.to_string()))?
     .json::<Vec<RuntimeJson>>()
@@ -159,7 +165,7 @@ async fn runtimes() -> Result<Json<Vec<RuntimeReturnJson>>, status::NotFound<Str
 #[launch]
 fn rocket() -> _ {
   rocket::custom(Config {
-    port: 5000,
+    port: PORT,
     ..Config::default()
   })
   .mount("/", openapi_get_routes![runtimes, submit])
