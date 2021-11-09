@@ -153,21 +153,20 @@ async fn execute(data: Json<ExecuteCodeRequest>) -> Result<Json<Execution>, stat
 
 #[cached(time = 60, result = true)]
 async fn piston_runtimes() -> Result<Vec<Runtime>, String> {
-  println!("FETCHING");
-  let res = reqwest::get(RUNTIMES_API)
-    .await
-    .map_err(|e| e.to_string())?
-    .json::<Vec<PistonRuntime>>()
-    .await
-    .map_err(|e| e.to_string())?
-    .iter()
-    .map(|r| Runtime {
-      language: r.language.to_owned(),
-      version: r.version.to_owned(),
-    })
-    .collect_vec();
-
-  Ok(res)
+  Ok(
+    reqwest::get(RUNTIMES_API)
+      .await
+      .map_err(|e| e.to_string())?
+      .json::<Vec<PistonRuntime>>()
+      .await
+      .map_err(|e| e.to_string())?
+      .iter()
+      .map(|r| Runtime {
+        language: r.language.to_owned(),
+        version: r.version.to_owned(),
+      })
+      .collect_vec(),
+  )
 }
 
 #[openapi]
