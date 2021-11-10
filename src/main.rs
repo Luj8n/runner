@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate rocket;
 
+#[macro_use]
+extern crate dotenv_codegen;
+
 use cached::proc_macro::cached;
 use itertools::Itertools;
 use rocket::{
@@ -20,8 +23,8 @@ const PORT: u16 = 5000;
 const COMPILE_MEMORY_LIMIT: i64 = 512 * 1024 * 1024;
 const RUN_MEMORY_LIMIT: i64 = 512 * 1024 * 1024;
 
-const EXECUTE_API: &str = "http://localhost:2000/api/v2/execute";
-const RUNTIMES_API: &str = "http://localhost:2000/api/v2/runtimes";
+const EXECUTE_API: &str = dotenv!("EXECUTE_API");
+const RUNTIMES_API: &str = dotenv!("RUNTIMES_API");
 
 #[derive(Serialize, Deserialize)]
 struct PistonRun {

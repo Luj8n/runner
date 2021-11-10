@@ -14,3 +14,5 @@ serde_json = "1.0.69"
 itertools = "0.10.1"
 rocket_okapi = { version = "0.8.0-rc.1", features = ["swagger", "rapidoc"] }
 cached = "0.26.2"
+dotenv = "0.15.0"
+dotenv_codegen = "0.15.0"
