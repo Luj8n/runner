@@ -69,12 +69,16 @@ struct PistonRuntime {
   runtime: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+struct PistonMessageError {
+  message: String,
+}
+
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
 struct ExecuteCodeRequest {
   code: String,
   language: String,
   stdin: Option<String>,
-  timeout: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
@@ -92,12 +96,6 @@ struct Runtime {
 
 #[cached(time = 60, result = true)]
 async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
-  if let Some(timeout) = data.timeout {
-    if !(1..=3000).contains(&timeout) {
-      return Err("Timeout must be between 1 and 3000 ms (inclusive)".to_string());
-    }
-  }
-
   let execute_json = PistonExecuteRequest {
     language: data.language.to_owned(),
     version: piston_runtimes()
@@ -110,7 +108,7 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
     compile_memory_limit: Some(COMPILE_MEMORY_LIMIT),
     compile_timeout: None,
     run_memory_limit: Some(RUN_MEMORY_LIMIT),
-    run_timeout: data.timeout,
+    run_timeout: None,
     stdin: data.stdin,
     files: vec![PistonFile {
       name: None,
@@ -118,15 +116,21 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
     }],
   };
 
-  let res = reqwest::Client::new()
+  let response_value: serde_json::Value = reqwest::Client::new()
     .post(EXECUTE_API)
     .json(&execute_json)
     .send()
     .await
     .map_err(|e| e.to_string())?
-    .json::<PistonExecution>()
+    .json()
     .await
     .map_err(|e| e.to_string())?;
+
+  let res = serde_json::from_value::<PistonExecution>(response_value.clone()).map_err(|_| {
+    serde_json::from_value::<PistonMessageError>(response_value)
+      .map(|r| r.message)
+      .unwrap_or_else(|e| e.to_string())
+  })?;
 
   let stdout = if res.run.stdout.ends_with('\n') {
     // chop off \n if it ends with it
