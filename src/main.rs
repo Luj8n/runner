@@ -97,7 +97,7 @@ struct Runtime {
   version: String,
 }
 
-// #[cached(time = 60, result = true)]
+#[cached(time = 60, result = true)]
 async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
   let execute_json = PistonExecuteRequest {
     language: data.language.to_owned(),
