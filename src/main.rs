@@ -33,6 +33,8 @@ struct PistonRun {
   code: Option<i64>,
   signal: Option<String>,
   output: String,
+  time: i64,
+  time_limit_exceeded: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -85,6 +87,7 @@ struct ExecuteCodeRequest {
 struct Execution {
   stdout: String,
   stderr: Option<String>,
+  time: i64,
   time_limit_exceeded: bool,
 }
 
@@ -94,7 +97,7 @@ struct Runtime {
   version: String,
 }
 
-#[cached(time = 60, result = true)]
+// #[cached(time = 60, result = true)]
 async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
   let execute_json = PistonExecuteRequest {
     language: data.language.to_owned(),
@@ -139,8 +142,6 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
     res.run.stdout.to_owned()
   };
 
-  let time_limit_exceeded = res.run.signal.map(|s| s == "SIGKILL").unwrap_or(false);
-
   Ok(Execution {
     stdout,
     stderr: if res.run.stderr.is_empty() {
@@ -148,7 +149,8 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
     } else {
       Some(res.run.stderr)
     },
-    time_limit_exceeded,
+    time: res.run.time,
+    time_limit_exceeded: res.run.time_limit_exceeded,
   })
 }
 
