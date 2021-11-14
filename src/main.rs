@@ -27,7 +27,7 @@ const EXECUTE_API: &str = dotenv!("EXECUTE_API");
 const RUNTIMES_API: &str = dotenv!("RUNTIMES_API");
 
 #[derive(Serialize, Deserialize)]
-struct PistonRun {
+struct PistonJob {
   stdout: String,
   stderr: String,
   code: Option<i64>,
@@ -39,7 +39,8 @@ struct PistonRun {
 
 #[derive(Serialize, Deserialize)]
 struct PistonExecution {
-  run: PistonRun,
+  compile: Option<PistonJob>,
+  run: PistonJob,
   language: String,
   version: String,
 }
@@ -89,12 +90,21 @@ struct Execution {
   stderr: Option<String>,
   time: i64,
   time_limit_exceeded: bool,
+  successful: bool,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 struct Runtime {
   language: String,
   version: String,
+}
+
+fn empty_to_none(str: String) -> Option<String> {
+  if str.is_empty() {
+    None
+  } else {
+    Some(str)
+  }
 }
 
 #[cached(time = 60, result = true)]
@@ -114,7 +124,7 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
     run_timeout: None,
     stdin: data.stdin,
     files: vec![PistonFile {
-      name: None,
+      name: Some("Main".to_string()),
       content: data.code.to_owned(),
     }],
   };
@@ -142,15 +152,24 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
     res.run.stdout.to_owned()
   };
 
+  let compile_stderr = if let Some(compile) = &res.compile {
+    empty_to_none(compile.stderr.clone())
+  } else {
+    None
+  };
+
+  let run_stderr = empty_to_none(res.run.stderr);
+
+  let stderr = compile_stderr.or(run_stderr);
+
+  let successful = res.run.code.map_or(res.run.signal.is_none(), |c| c == 0);
+
   Ok(Execution {
     stdout,
-    stderr: if res.run.stderr.is_empty() {
-      None
-    } else {
-      Some(res.run.stderr)
-    },
+    stderr,
     time: res.run.time,
     time_limit_exceeded: res.run.time_limit_exceeded,
+    successful,
   })
 }
 
