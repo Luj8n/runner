@@ -117,7 +117,7 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
       .find(|runtime| runtime.language == data.language)
       .ok_or(format!("Couldn't find '{}' language", data.language))?
       .version,
-    args: None,
+    args: data.stdin.clone().map(|s| s.lines().map(str::to_string).collect_vec()),
     compile_memory_limit: Some(COMPILE_MEMORY_LIMIT),
     compile_timeout: None,
     run_memory_limit: Some(RUN_MEMORY_LIMIT),
