@@ -97,6 +97,7 @@ struct Execution {
 struct Runtime {
   language: String,
   version: String,
+  aliases: Vec<String>,
 }
 
 fn empty_to_none(str: String) -> Option<String> {
@@ -110,11 +111,17 @@ fn empty_to_none(str: String) -> Option<String> {
 #[cached(time = 60, result = true)]
 async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
   let execute_json = PistonExecuteRequest {
-    language: data.language.to_owned(),
+    language: data.language.clone(),
     version: piston_runtimes()
       .await?
       .into_iter()
-      .find(|runtime| runtime.language == data.language)
+      .find(|runtime| {
+        runtime.language.to_lowercase() == data.language.to_lowercase()
+          || runtime
+            .aliases
+            .iter()
+            .any(|alias| alias.to_lowercase() == data.language.to_lowercase())
+      })
       .ok_or(format!("Couldn't find '{}' language", data.language))?
       .version,
     args: data.stdin.clone().map(|s| s.lines().map(str::to_string).collect_vec()),
@@ -125,7 +132,7 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
     stdin: data.stdin,
     files: vec![PistonFile {
       name: Some("Main".to_string()),
-      content: data.code.to_owned(),
+      content: data.code.clone(),
     }],
   };
 
@@ -149,7 +156,7 @@ async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, String> {
     // chop off \n if it ends with it
     res.run.stdout[0..res.run.stdout.len() - 1].to_string()
   } else {
-    res.run.stdout.to_owned()
+    res.run.stdout.clone()
   };
 
   let compile_stderr = if let Some(compile) = &res.compile {
@@ -190,8 +197,9 @@ async fn piston_runtimes() -> Result<Vec<Runtime>, String> {
       .map_err(|e| e.to_string())?
       .iter()
       .map(|r| Runtime {
-        language: r.language.to_owned(),
-        version: r.version.to_owned(),
+        language: r.language.clone(),
+        version: r.version.clone(),
+        aliases: r.aliases.clone(),
       })
       .collect_vec(),
   )
@@ -213,7 +221,7 @@ fn rocket() -> _ {
   .mount(
     "/swagger-ui/",
     swagger_ui::make_swagger_ui(&swagger_ui::SwaggerUIConfig {
-      url: "../openapi.json".to_owned(),
+      url: "../openapi.json".to_string(),
       ..Default::default()
     }),
   )
