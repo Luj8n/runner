@@ -78,7 +78,7 @@ pub struct Execution {
   stderr: Option<String>,
   time: i64,
   time_limit_exceeded: bool,
-  successful: bool,
+  did_not_crash: bool,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
@@ -164,14 +164,14 @@ pub async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, Strin
 
   let stderr = compile_stderr.or(run_stderr);
 
-  let successful = res.run.code.map_or(res.run.signal.is_none(), |c| c == 0);
+  let did_not_crash = res.run.code.map_or(res.run.signal.is_none(), |c| c == 0);
 
   Ok(Execution {
     stdout,
     stderr,
     time: res.run.time,
     time_limit_exceeded: res.run.time_limit_exceeded,
-    successful,
+    did_not_crash,
   })
 }
 
