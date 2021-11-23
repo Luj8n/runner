@@ -63,7 +63,6 @@ struct PistonMessageError {
   message: String,
 }
 
-// TODO: add language version option & maybe more
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
 pub struct ExecuteCodeRequest {
   code: String,
