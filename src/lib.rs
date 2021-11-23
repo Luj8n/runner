@@ -63,11 +63,13 @@ struct PistonMessageError {
   message: String,
 }
 
+// TODO: add language version option & maybe more
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
 pub struct ExecuteCodeRequest {
   code: String,
   language: String,
-  stdin: Option<String>,
+  version: Option<String>,
+  input: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
@@ -101,6 +103,7 @@ pub async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, Strin
     version: piston_runtimes()
       .await?
       .into_iter()
+      .filter(|runtime| data.version.clone().map_or(true, |version| version == runtime.version))
       .find(|runtime| {
         runtime.language.to_lowercase() == data.language.to_lowercase()
           || runtime
@@ -108,14 +111,20 @@ pub async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, Strin
             .iter()
             .any(|alias| alias.to_lowercase() == data.language.to_lowercase())
       })
-      .ok_or(format!("Couldn't find '{}' language", data.language))?
+      .ok_or(format!(
+        "Couldn't find '{}' language{}",
+        data.language,
+        data
+          .version
+          .map_or("".to_string(), |v| format!(" which has the '{}' version", v))
+      ))?
       .version,
-    args: data.stdin.clone().map(|s| s.lines().map(str::to_string).collect_vec()),
+    args: data.input.clone().map(|s| s.lines().map(str::to_string).collect_vec()),
     compile_memory_limit: Some(COMPILE_MEMORY_LIMIT),
     compile_timeout: None,
     run_memory_limit: Some(RUN_MEMORY_LIMIT),
     run_timeout: None,
-    stdin: data.stdin,
+    stdin: data.input,
     files: vec![PistonFile {
       name: Some("Main".to_string()),
       content: data.code.clone(),
@@ -194,7 +203,8 @@ mod tests {
     let execution = piston_execute(ExecuteCodeRequest {
       code: "p $*.sum &:to_i".to_string(),
       language: "ruby".to_string(),
-      stdin: Some("2\n4".to_string()),
+      version: None,
+      input: Some("2\n4".to_string()),
     })
     .await?;
 
