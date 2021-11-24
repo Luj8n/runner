@@ -16,6 +16,15 @@ async fn execute(data: Json<runner::ExecuteCodeRequest>) -> Result<Json<runner::
 }
 
 #[openapi]
+#[post("/run_tests", data = "<data>")]
+async fn run_tests(data: Json<runner::RunTests>) -> Result<Json<runner::ExecuteWithTests>, status::NotFound<String>> {
+  runner::execute_with_tests(data.clone())
+    .await
+    .map(Json)
+    .map_err(status::NotFound)
+}
+
+#[openapi]
 #[get("/runtimes")]
 async fn runtimes() -> Result<Json<Vec<runner::Runtime>>, status::NotFound<String>> {
   runner::piston_runtimes().await.map(Json).map_err(status::NotFound)
@@ -27,7 +36,7 @@ fn rocket() -> _ {
     port: PORT,
     ..Config::default()
   })
-  .mount("/", openapi_get_routes![runtimes, execute])
+  .mount("/", openapi_get_routes![runtimes, execute, run_tests])
   .mount(
     "/swagger-ui/",
     swagger_ui::make_swagger_ui(&swagger_ui::SwaggerUIConfig {

@@ -9,8 +9,7 @@ use rocket_okapi::okapi::{schemars, schemars::JsonSchema};
 const COMPILE_MEMORY_LIMIT: i64 = 512 * 1024 * 1024;
 const RUN_MEMORY_LIMIT: i64 = 512 * 1024 * 1024;
 
-const EXECUTE_API: &str = dotenv!("EXECUTE_API");
-const RUNTIMES_API: &str = dotenv!("RUNTIMES_API");
+const PISTON_API: &str = dotenv!("PISTON_API");
 
 #[derive(Serialize, Deserialize)]
 struct PistonJob {
@@ -63,7 +62,6 @@ struct PistonMessageError {
   message: String,
 }
 
-// TODO: add language version option & maybe more
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
 pub struct ExecuteCodeRequest {
   code: String,
@@ -78,7 +76,7 @@ pub struct Execution {
   stderr: Option<String>,
   time: i64,
   time_limit_exceeded: bool,
-  successful: bool,
+  did_not_crash: bool,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
@@ -132,7 +130,7 @@ pub async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, Strin
   };
 
   let response_value: serde_json::Value = reqwest::Client::new()
-    .post(EXECUTE_API)
+    .post(PISTON_API.to_string() + "/execute")
     .json(&execute_json)
     .send()
     .await
@@ -164,21 +162,21 @@ pub async fn piston_execute(data: ExecuteCodeRequest) -> Result<Execution, Strin
 
   let stderr = compile_stderr.or(run_stderr);
 
-  let successful = res.run.code.map_or(res.run.signal.is_none(), |c| c == 0);
+  let did_not_crash = res.run.code.map_or(res.run.signal.is_none(), |c| c == 0);
 
   Ok(Execution {
     stdout,
     stderr,
     time: res.run.time,
     time_limit_exceeded: res.run.time_limit_exceeded,
-    successful,
+    did_not_crash,
   })
 }
 
 #[cached(time = 60, result = true)]
 pub async fn piston_runtimes() -> Result<Vec<Runtime>, String> {
   Ok(
-    reqwest::get(RUNTIMES_API)
+    reqwest::get(PISTON_API.to_string() + "/runtimes")
       .await
       .map_err(|e| e.to_string())?
       .json::<Vec<PistonRuntime>>()
@@ -192,6 +190,73 @@ pub async fn piston_runtimes() -> Result<Vec<Runtime>, String> {
       })
       .collect_vec(),
   )
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+pub struct Test {
+  input: String,
+  expected_output: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+pub struct RunTests {
+  code: String,
+  language: String,
+  version: Option<String>,
+  tests: Vec<Test>,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+pub struct ExecutionWithTest {
+  input: String,
+  expected_output: String,
+  actual_output: String,
+  stderr: Option<String>,
+  time: i64,
+  time_limit_exceeded: bool,
+  did_not_crash: bool,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+pub struct ExecuteWithTests {
+  executions: Vec<ExecutionWithTest>,
+  tests_passed: i64,
+}
+
+#[cached(time = 60, result = true)]
+pub async fn execute_with_tests(data: RunTests) -> Result<ExecuteWithTests, String> {
+  let mut executions: Vec<ExecutionWithTest> = Vec::new();
+
+  let mut tests_passed = 0;
+
+  for test in data.tests {
+    let execution = piston_execute(ExecuteCodeRequest {
+      code: data.code.clone(),
+      input: Some(test.input.clone()),
+      language: data.language.clone(),
+      version: data.version.clone(),
+    })
+    .await?;
+
+    if execution.stdout == test.expected_output && execution.did_not_crash {
+      tests_passed += 1;
+    }
+
+    executions.push(ExecutionWithTest {
+      input: test.input,
+      actual_output: execution.stdout,
+      expected_output: test.expected_output,
+      did_not_crash: execution.did_not_crash,
+      stderr: execution.stderr,
+      time: execution.time,
+      time_limit_exceeded: execution.time_limit_exceeded,
+    });
+  }
+
+  Ok(ExecuteWithTests {
+    executions,
+    tests_passed,
+  })
 }
 
 #[cfg(test)]
