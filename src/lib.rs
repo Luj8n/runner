@@ -193,6 +193,73 @@ pub async fn piston_runtimes() -> Result<Vec<Runtime>, String> {
   )
 }
 
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+pub struct Test {
+  input: String,
+  expected_output: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+pub struct RunTests {
+  code: String,
+  language: String,
+  version: Option<String>,
+  tests: Vec<Test>,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+pub struct ExecutionWithTest {
+  input: String,
+  expected_output: String,
+  actual_output: String,
+  stderr: Option<String>,
+  time: i64,
+  time_limit_exceeded: bool,
+  did_not_crash: bool,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+pub struct ExecuteWithTests {
+  executions: Vec<ExecutionWithTest>,
+  tests_passed: i64,
+}
+
+#[cached(time = 60, result = true)]
+pub async fn execute_with_tests(data: RunTests) -> Result<ExecuteWithTests, String> {
+  let mut executions: Vec<ExecutionWithTest> = Vec::new();
+
+  let mut tests_passed = 0;
+
+  for test in data.tests {
+    let execution = piston_execute(ExecuteCodeRequest {
+      code: data.code.clone(),
+      input: Some(test.input.clone()),
+      language: data.language.clone(),
+      version: data.version.clone(),
+    })
+    .await?;
+
+    if execution.stdout == test.expected_output && execution.did_not_crash {
+      tests_passed += 1;
+    }
+
+    executions.push(ExecutionWithTest {
+      input: test.input,
+      actual_output: execution.stdout,
+      expected_output: test.expected_output,
+      did_not_crash: execution.did_not_crash,
+      stderr: execution.stderr,
+      time: execution.time,
+      time_limit_exceeded: execution.time_limit_exceeded,
+    });
+  }
+
+  Ok(ExecuteWithTests {
+    executions,
+    tests_passed,
+  })
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
