@@ -15,8 +15,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Just testing
+    - name: Build
       shell: bash
       env:
         PISTON_API: ${{ secrets.PISTON_API }}
-      run: echo $PISTON_API
+      run: cargo build --verbose
+    - name: Run tests
+      shell: bash
+      env:
+        PISTON_API: ${{ secrets.PISTON_API }}
+      run: cargo test --verbose
