@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,12 +14,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Create .env file
-      env:
-        PISTON_API: ${{ secrets.PISTON_API }}
-      run: echo "PISTON_API=$PISTON_API" > .env
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v2
+      - name: Create .env file
+        env:
+          PISTON_API: ${{ secrets.PISTON_API }}
+        run: echo "PISTON_API=$PISTON_API" > .env
+      - name: Build
+        run: cargo build
+      - name: Check formatting
+        run: cargo fmt -- --check
+      - name: Run clippy
+        run: cargo clippy-- -D warnings
+      - name: Run tests
+        run: cargo test
