@@ -269,11 +269,11 @@ mod tests {
       code: "p $*.sum &:to_i".to_string(),
       language: "ruby".to_string(),
       version: None,
-      input: Some("2\n4".to_string()),
+      input: Some("1\n2".to_string()),
     })
     .await?;
 
-    if execution.stdout != "6" {
+    if execution.stdout != "3" {
       return Err("Output is not equal to six".to_string());
     }
 
