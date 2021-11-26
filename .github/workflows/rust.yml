@@ -15,7 +15,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Create .env file
+    - name: Create a .env file
       env:
         PISTON_API: ${{ secrets.PISTON_API }}
       run: echo "PISTON_API=$PISTON_API" > .env
