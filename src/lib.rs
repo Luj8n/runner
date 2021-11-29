@@ -58,11 +58,13 @@ struct PistonRuntime {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 struct PistonMessageError {
   message: String,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ExecuteCodeRequest {
   code: String,
   language: String,
@@ -71,6 +73,7 @@ pub struct ExecuteCodeRequest {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Execution {
   stdout: String,
   stderr: Option<String>,
@@ -80,6 +83,7 @@ pub struct Execution {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Runtime {
   language: String,
   version: String,
@@ -193,12 +197,14 @@ pub async fn piston_runtimes() -> Result<Vec<Runtime>, String> {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Test {
   input: String,
   expected_output: String,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct RunTests {
   code: String,
   language: String,
@@ -207,6 +213,7 @@ pub struct RunTests {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ExecutionWithTest {
   input: String,
   expected_output: String,
@@ -218,6 +225,7 @@ pub struct ExecutionWithTest {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ExecuteWithTests {
   executions: Vec<ExecutionWithTest>,
   tests_passed: i64,
