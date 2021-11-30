@@ -33,6 +33,7 @@ async fn runtimes() -> Result<Json<Vec<runner::Runtime>>, status::NotFound<Strin
 #[launch]
 fn rocket() -> _ {
   rocket::custom(Config {
+    address: [0, 0, 0, 0].into(),
     port: PORT,
     ..Config::default()
   })
