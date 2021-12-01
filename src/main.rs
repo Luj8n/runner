@@ -61,3 +61,17 @@ fn rocket() -> _ {
     }),
   )
 }
+
+#[cfg(test)]
+mod test {
+  use super::rocket;
+  use rocket::http::Status;
+  use rocket::local::blocking::Client;
+
+  #[test]
+  fn get_runtimes() {
+    let client = Client::tracked(rocket()).expect("valid rocket instance");
+    let runtimes_response = client.get("/runtimes").dispatch();
+    assert_eq!(runtimes_response.status(), Status::Ok);
+  }
+}
